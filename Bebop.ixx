@@ -636,13 +636,13 @@ export namespace Bebop
 		Vec2		v2ws;			// vertex 2 in world space
 		Vec2		v3ws;			// vertex 3 in world space
 
-		// Return the number of clipped points
-		int ClipSegmentToLine(const std::vector<Vec2>& contactsIn,
-			OUT std::vector<Vec2>& contactsOut,
+		// Return the number of contact points after clipping
+		int ClipSegmentToLine(const std::array<Vec2, 2>& contactsIn,
+			OUT std::array<Vec2, 2>& contactsOut,
 			Vec2 c0,
 			Vec2 c1) const
 		{
-			int numOut = 0;
+			int contactPointCountAfterClipping = 0;
 
 			// The cross product is used here, because a.Cross(b) == a.Dot(bPerp),
 			// and that's what we're interested in. However this is only true if
@@ -655,12 +655,12 @@ export namespace Bebop
 
 			const Vec2 normal = (c1 - c0).NormalizedSafe();
 
-			float dist0 = (contactsIn[0] - c0).Cross(normal);
-			float dist1 = (contactsIn[1] - c0).Cross(normal);
+			const float dist0 = (contactsIn[0] - c0).Cross(normal);
+			const float dist1 = (contactsIn[1] - c0).Cross(normal);
 
 			// If the points are behind the plane - no need to clip them
-			if (dist0 <= 0.0f) { contactsOut[numOut++] = contactsIn[0]; }
-			if (dist1 <= 0.0f) { contactsOut[numOut++] = contactsIn[1]; }
+			if (dist0 <= 0.0f) { contactsOut[contactPointCountAfterClipping++] = contactsIn[0]; }
+			if (dist1 <= 0.0f) { contactsOut[contactPointCountAfterClipping++] = contactsIn[1]; }
 
 			// If the points are on different sides of the plane:
 			if (dist0 * dist1 < 0.0f)
@@ -668,10 +668,10 @@ export namespace Bebop
 				const float totalDist = dist0 - dist1;
 				const float t = dist0 / totalDist;
 				const Vec2 contact = contactsIn[0] + (contactsIn[1] - contactsIn[0]) * t;
-				contactsOut[numOut++] = contact;
+				contactsOut[contactPointCountAfterClipping++] = contact;
 			}
 
-			return numOut;
+			return contactPointCountAfterClipping;
 		}
 
 	protected:
@@ -1431,20 +1431,52 @@ export namespace Bebop
 		const Vec2 v0 = incidentBox[incidentEdgeStartIndex];
 		const Vec2 v1 = incidentBox[incidentEdgeEndIndex];
 
-		std::vector<Vec2> contactPoints{ v0, v1 };
-		std::vector<Vec2> clippedPoints = contactPoints;
+		//        B*
+		//          \
+		//           \                                         
+		//			  * <---- AB edge clipped by OP edge
+		//		       \
+		//          P *-\--------- * Q
+		//            |  \         |
+		//            |   * A      |
+		//            |            |
+		//            |            |
+		//            |            |
+		//	        O *------------* R
+		//
+		// Given the reference edge PQ, and the incident edge AB, let's try to
+		// clip the incident edge using the edges that border the reference edge.
+		// This way we can find both contact points, in case there are more than
+		// one. E.g. if AB is parallel to PQ, then there should be either no contact
+		// points, or two of them; if PQ completely overlaps AB, then the two contact
+		// points will be A and B, but if PQ only partially overlaps AB, then one of 
+		// the contact points will be one of the endpoints of the incident edge (so
+		// either A or B), and the other contact point will be on the AB segment,
+		// clipped by either the OP or the QR edges.
+		//
+		// In the case illustrated above, clipping AB by OP will yield two contact
+		// points, but one of them is actually going to be on the outside of the PQ
+		// reference edge, so we will ignore it - clearly, that point is not in
+		// contact with the reference rigidbody, so there's no need to apply a non-
+		// penetration impulse to it.
 
+		std::array<Vec2, 2> contactPoints{ v0, v1 };
+		std::array<Vec2, 2> clippedPoints = contactPoints;
+
+		const int previousEdge = referenceStartIndex == 0 ? 3 : referenceStartIndex - 1;
+		const int nextEdge = referenceStartIndex == 3 ? 0 : referenceStartIndex + 1;
+		
 		for (int i = 0; i < 4; ++i)
 		{
-			if (i == referenceStartIndex)
+			if (i != previousEdge && i != nextEdge)
 			{
 				continue;
 			}
 
 			const Vec2 c0 = referenceBox[i];
 			const Vec2 c1 = referenceBox[(i + 1) % 4];
-			int numClipped = referenceBox.ClipSegmentToLine(contactPoints, clippedPoints, c0, c1);
-			if (numClipped < 2)
+			const int contactPointCountAfterClipping = referenceBox.ClipSegmentToLine(contactPoints, clippedPoints, c0, c1);
+			if (contactPointCountAfterClipping < 2)
 			{
 				break;
 			}
