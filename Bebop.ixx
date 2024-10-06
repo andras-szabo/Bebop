@@ -218,8 +218,8 @@ export namespace Bebop
 		Vec2(int x_, int y_) : x{ static_cast<float>(x_) }, y{ static_cast<float>(y_) } {}
 
 		Vec2		operator-() const;
-		Vec2& operator+=(const Vec2& rhs);
-		Vec2& operator-=(const Vec2& rhs);
+		Vec2&		operator+=(const Vec2& rhs);
+		Vec2&		operator-=(const Vec2& rhs);
 		Vec2		operator*(const Matrix2x2& m) const;
 
 		float		Magnitude() const;
@@ -335,10 +335,6 @@ export namespace Bebop
 		return normal;
 	}
 
-	//Vec2 operator*(const Matrix2x2& m, const Vec2& v)
-	//{
-	//	return Vec2{ m.m00 * v.x + m.m01 * v.y, m.m10 * v.x + m.m11 * v.y };
-	//}
 #pragma endregion
 
 #pragma region Particle
