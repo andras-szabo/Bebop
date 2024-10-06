@@ -469,15 +469,15 @@ export namespace Bebop
 #pragma region Contact
 	struct Contact
 	{
-		struct Rigidbody*	a{ nullptr };	
-		struct Rigidbody*	b{ nullptr };	
+		struct Rigidbody* a{ nullptr };
+		struct Rigidbody* b{ nullptr };
 
 		Vec2				normal{ 0.0f, 0.0f };
 		Vec2				start{ 0.0f, 0.0f };
 		Vec2				end{ 0.0f, 0.0f };
 
 		float				depth{ 0.0f };
-		
+
 		// Contacts are expected to be temporary objects. The bodies they point to
 		// are not owned by the contact, and they can be moved around in memory after
 		// the contact has been created. Therefore the contact should not be used
@@ -522,9 +522,6 @@ export namespace Bebop
 			a{ a_ },
 			b{ b_ }
 		{}
-
-		//Rigidbody*				a{ nullptr };
-		//Rigidbody*				b{ nullptr };
 
 		Unalmas::SlotMap<Rigidbody>* bodies{ nullptr };
 		Unalmas::SlotMapKey a;
@@ -1007,66 +1004,6 @@ export namespace Bebop
 		_positionAdjustment = Vec2();
 	}
 
-	/*void Rigidbody::Update(float deltaT, const Vec2& gravity)
-	{
-		Vec2 impulseLinearVelocity{ 0.0f, 0.0f };
-		float impulseAngularVelocity{ 0.0f };
-
-		if (_inverseMass > 0.0f)
-		{
-			_forces += (gravity * (1.0f / _inverseMass));
-			impulseLinearVelocity = _linearImpulses * _inverseMass;
-			impulseAngularVelocity = _angularImpulses * _inverseMomentOfInertia;
-		}
-
-		// TODO - other forces
-
-		_linearAcceleration = _forces * _inverseMass;
-
-		// TODO - calculate angular acceleration
-
-		//if (_inverseMomentOfInertia > 0.0f)
-		//{
-		//	_torque += 1.0f;
-		//}
-
-		_angularAcceleration = _torque * _inverseMomentOfInertia;
-
-#ifdef INTEGRATE_EULER
-		linearVelocity += _linearAcceleration * deltaT;
-		linearVelocity += impulseLinearVelocity;
-		position += (linearVelocity * deltaT + _positionAdjustment);
-
-		angularVelocity += _angularAcceleration * deltaT;
-		angularVelocity += impulseAngularVelocity;
-		rotationRadians += angularVelocity * deltaT;
-#else
-		const float deltaSquared = deltaT * deltaT;
-		const Vec2 prevPosition = position;
-
-		position.x = (position.x * 2.0f) - previousPosition.x + (_linearAcceleration.x * deltaSquared) + impulseLinearVelocity.x * deltaT;
-		position.y = (position.y * 2.0f) - previousPosition.y + (_linearAcceleration.y * deltaSquared) + impulseLinearVelocity.y * deltaT;
-
-		previousPosition = prevPosition;
-
-		linearVelocity = deltaT > 0.0f ? (position - previousPosition) / deltaT : Vec2(0.0f, 0.0f);
-
-		position += _positionAdjustment;
-		previousPosition += _positionAdjustment;
-
-		const float prevRotation = _rotationRadians;
-		_rotationRadians = _rotationRadians * 2.0f - previousRotation + _angularAcceleration * deltaSquared + impulseAngularVelocity * deltaT;
-		previousRotation = prevRotation;
-
-		angularVelocity = deltaT > 0.0f ? (_rotationRadians - previousRotation) / deltaT : 0.0f;
-#endif
-
-		_torque = 0.0f;
-		_forces = Vec2();
-		_linearImpulses = Vec2();
-		_positionAdjustment = Vec2();
-		_angularImpulses = 0.0f;
-	}*/
 #pragma endregion
 
 #pragma region Constraints implementation
@@ -1082,7 +1019,6 @@ export namespace Bebop
 	{
 	}
 
-	//JointConstraint::JointConstraint(Rigidbody* const a_, Rigidbody* const b_, const Vec2& anchorPoint) :
 	JointConstraint::JointConstraint(Unalmas::SlotMap<Rigidbody>* bodies_,
 		Unalmas::SlotMapKey a_,
 		Unalmas::SlotMapKey b_,
@@ -1093,8 +1029,6 @@ export namespace Bebop
 	{
 	}
 
-	//TODOfix this --- what's there to fix?
-	//		contact.a is still a pointer
 	NonPenetrationConstraint::NonPenetrationConstraint(Unalmas::SlotMap<Rigidbody>* bodies_,
 		Unalmas::SlotMapKey a_,
 		Unalmas::SlotMapKey b_,
@@ -1154,11 +1088,11 @@ export namespace Bebop
 			const Vec2 tangent = n.GetPerpendicular();
 			jacobian.At(1, 0) = -tangent.x;
 			jacobian.At(1, 1) = -tangent.y;
-			jacobian.At(1, 2) = (-ra).Cross(tangent); // tangent.Cross(-ra);//-ra.Cross(tangent);
+			jacobian.At(1, 2) = (-ra).Cross(tangent);
 
 			jacobian.At(1, 3) = tangent.x;
 			jacobian.At(1, 4) = tangent.y;
-			jacobian.At(1, 5) = rb.Cross(tangent); // tangent.Cross(rb); // rb.Cross(tangent);
+			jacobian.At(1, 5) = rb.Cross(tangent);
 		}
 		else
 		{
@@ -1242,16 +1176,14 @@ export namespace Bebop
 		const Vec2 ra = pa - aBody.position;
 		const Vec2 rb = pb - bBody.position;
 
-		//jacobian.At(0, 2) = ra.Cross(pa - pb) * 2.0f;	// Jacobian coefficient for A's angular velocity
-		jacobian.At(0, 2) = ra.Cross(pa - pb) * 2.0f;
+		jacobian.At(0, 2) = ra.Cross(pa - pb) * 2.0f;	// Jacobian coefficient for A's angular velocity
 
 		const Vec2 j3 = (pb - pa) * 2.0f;
 
 		jacobian.At(0, 3) = j3.x;		// Jacobian coefficient for B's linear velocity x
 		jacobian.At(0, 4) = j3.y;		// Jacobian coefficient for B's linear velocity y
 
-		//jacobian.At(0, 5) = rb.Cross(pb - pa) * 2.0f;	// Jacobian coefficient for B's angular velocity
-		jacobian.At(0, 5) = rb.Cross(pb - pa) * 2.0f;
+		jacobian.At(0, 5) = rb.Cross(pb - pa) * 2.0f;	// Jacobian coefficient for B's angular velocity
 
 		// Warm starting:
 		const Mat<6, 1> Jt = jacobian.Transpose();
@@ -1468,26 +1400,6 @@ export namespace Bebop
 			return false;
 		}
 
-		////TODO find multiple contact points if applicable
-		//Contact contact;
-		//contact.a = &rba;
-		//contact.b = &rbb;
-
-		//if (sepA > sepB)
-		//{
-		//	contact.depth = -sepA;
-		//	contact.normal = axis1;
-		//	contact.start = point1;
-		//	contact.end = contact.start + contact.normal * contact.depth;
-		//}
-		//else
-		//{
-		//	contact.depth = -sepB;
-		//	contact.normal = axis2;
-		//	contact.start = point2;
-		//	contact.end = contact.start + contact.normal * contact.depth;
-		//}
-
 		const auto& referenceBox = sepA > sepB ? box1 : box2;
 		const auto& incidentBox = sepA > sepB ? box2 : box1;
 
@@ -1547,180 +1459,6 @@ export namespace Bebop
 		}
 
 		return true;
-
-		///// .....
-/*
-
-		const float depth = sepA > sepB ? -sepA : -sepB;
-
-		//const auto& contactNormal = sepA > sepB ? axis1 : axis2;
-
-		const Vec2 clippingPlaneNormal = referenceNormal.GetPerpendicular();
-		const Vec2 contactNormal = referenceNormal;
-
-		const Vec2 a = incidentBox[incidentEdgeStartIndex];
-		const Vec2 b = incidentBox[incidentEdgeEndIndex];
-
-		const float projectedEdgeLength = Dot(b - a, clippingPlaneNormal);
-
-		const Vec2 p = referenceBox[referenceStartIndex];
-		const Vec2 q = referenceBox[referenceEndIndex];
-
-		//// "a" needs clipping if it's not in between p and q
-		Vec2 clippedPointA = a;
-		if (Dot(a - p, a - q) > 0)
-		{
-			const float dstAQ = Dot(q - a, clippingPlaneNormal);
-			const float t = dstAQ / projectedEdgeLength;
-			clippedPointA = a + (b - a) * t;
-			//const float dstAP = Dot(p - a, clippingPlaneNormal);
-			//const float t = dstAP / projectedEdgeLength;
-			//clippedPointA = a + (b - a) * t;
-		}
-
-		auto clippedPointB = b;
-
-		// "b" also needs clipping, if it's not between p and q
-		if (Dot(b - p, b - q) > 0)
-		{
-			const float dstAQ = Dot(p - a, clippingPlaneNormal);
-			const float t = dstAQ / projectedEdgeLength;
-			clippedPointB = a + (b - a) * t;
-		}
-
-		if (Dot(clippedPointA - p, contactNormal) < 0)
-		{
-			Contact contact;
-			contact.a = &rba;
-			contact.b = &rbb;
-
-			contact.depth = depth;
-			contact.normal = contactNormal;
-			contact.start = clippedPointA;
-			contact.end = contact.start + contact.normal * contact.depth;
-
-			contact.incidentEdgeStart = a;
-			contact.incidentEdgeEnd = b;
-
-			contact.referenceEdgeStart = p;
-			contact.referenceEdgeEnd = q;
-
-			contact.debugFoo = true;
-
-			contacts.push_back(contact);
-		}
-
-		if (Dot(clippedPointB - p, contactNormal) < 0)
-		{
-			Contact contact;
-			contact.a = &rba;
-			contact.b = &rbb;
-
-			contact.depth = depth;
-			contact.normal = contactNormal;
-			contact.start = clippedPointB;
-			contact.end = contact.start + contact.normal * contact.depth;
-
-			contact.incidentEdgeStart = a;
-			contact.incidentEdgeEnd = b;
-
-			contact.referenceEdgeStart = p;
-			contact.referenceEdgeEnd = q;
-
-			contact.debugFoo = false;
-
-			contacts.push_back(contact);
-		}
-
-		return true; */
-
-
-		//// Find clipping plane normal (= reference edge tangent)
-		//
-
-
-		//// Find full length of the edge, when projected onto the reference edge
-
-
-		//const auto& referenceBox = sepA > sepB ? box1 : box2;
-		//const int referenceStartIndex = sepA > sepB ? referenceFaceVertexA : referenceFaceVertexB;
-		//const int referenceEndIndex = (referenceStartIndex + 1) % 4;
-
-
-		//// Clip first point if needed
-		////		TODO - this is a bit, eugh, feels bad. We already know that one of the points
-		////		of the incident edge will be penetrating. But ok, let's try to test this
-		//auto clippedPointA = a;
-
-
-		//int contactCount = 0;
-
-		//// If the clipped point is on the inside of the reference face, we need to add a new contact
-		//if (Dot(clippedPointA - p, contactNormal) < 0)
-		//{
-		//	Contact contact;
-		//	contact.a = &rba;
-		//	contact.b = &rbb;
-		//	contact.depth = separation;
-		//	contact.normal = contactNormal;
-
-		//	if (sepA > sepB)
-		//	{
-		//		contact.start = clippedPointA;
-		//		contact.end = clippedPointA + contactNormal * contact.depth;
-		//	}
-		//	else
-		//	{
-		//		contact.end = clippedPointA;
-		//		contact.start = clippedPointA - contactNormal * contact.depth;
-		//	}
-
-		//	contact.referenceEdgeStart = p;
-		//	contact.referenceEdgeEnd = q;
-
-		//	contact.incidentEdgeStart = a;
-		//	contact.incidentEdgeEnd = b;
-
-		//	contact.debugFoo = false;
-
-		//	contacts.push_back(contact);
-
-		//	contactCount++;
-		//}
-
-		////if (Dot(clippedPointB - q, contactNormal) < 0)
-		////{
-		////	Contact contact;
-		////	contact.a = &rba;
-		////	contact.b = &rbb;
-		////	contact.depth = separation;
-		////	contact.normal = contactNormal;
-
-		////	if (sepA > sepB)
-		////	{
-		////		contact.start = clippedPointB;
-		////		contact.end = clippedPointB + contactNormal * contact.depth;
-		////	}
-		////	else
-		////	{
-		////		contact.end = clippedPointB;
-		////		contact.start = clippedPointB - contactNormal * contact.depth;
-		////	}
-
-		////	contact.referenceEdgeStart = p;
-		////	contact.referenceEdgeEnd = q;
-
-		////	contact.incidentEdgeStart = a;
-		////	contact.incidentEdgeEnd = b;
-
-		////	contact.debugFoo = true;
-
-		////	contacts.push_back(contact);
-
-		////	contactCount++;
-		////}
-
-		//return true;
 	}
 
 	bool IsColliding(const Circle& a, Rigidbody& rba, const Circle& b, Rigidbody& rbb, OUT std::vector<Contact>& contacts)
@@ -1751,7 +1489,6 @@ export namespace Bebop
 		return false;
 	}
 
-	//int FindClosestEdgeIndex(const Box& box, const Vec2& circleOrigin, float radius, OUT Contact& contact)
 	int FindClosestEdgeIndex(const Box& box, const Circle& circle, Rigidbody& boxRB, Rigidbody& circleRB, OUT std::vector<Contact>& contacts)
 	{
 		float closestDistanceSquared = circle.radius * circle.radius;
@@ -1923,28 +1660,13 @@ export namespace Bebop
 		{
 			if (typeA == RigidbodyType::Box)
 			{
-				bool isColliding = IsColliding(std::get<Box>(a.shape), std::get<Circle>(b.shape), a, b, OUT contacts);
-				return isColliding;
-				/*if (IsColliding(std::get<Box>(a.shape), std::get<Circle>(b.shape), b.position, OUT contacts))
-				{
-					contact.a = &a;
-					contact.b = &b;
-
-					return true;
-				}*/
+				return IsColliding(std::get<Box>(a.shape), std::get<Circle>(b.shape), a, b, OUT contacts);
 			}
 			else
 			{
 				bool isColliding = IsColliding(std::get<Box>(b.shape), std::get<Circle>(a.shape), b, a, OUT contacts);
 				didSwapAandB = isColliding;
 				return isColliding;
-				//if (IsColliding(std::get<Box>(b.shape), std::get<Circle>(a.shape), a.position, OUT contacts))
-				//{
-				//	contact.a = &b;
-				//	contact.b = &a;
-
-				//	return true;
-				//}
 			}
 		}
 
@@ -1965,8 +1687,8 @@ export namespace Bebop
 		Unalmas::SlotMapKey				ConnectWithSpring(Unalmas::SlotMapKey a, Unalmas::SlotMapKey b, float lengthAtRest, float k);
 		Unalmas::SlotMapKey				CreateParticleConstraint(ConstraintType type, const Unalmas::SlotMapKey a, const Unalmas::SlotMapKey b, float param);
 		void							DestroyParticle(const Unalmas::SlotMapKey particle);
-		Unalmas::SlotMap<Particle>&		GetParticles() { return _particles; }
-		Unalmas::SlotMap<Rigidbody>&	GetRigidbodies() { return _rigidbodies; }
+		Unalmas::SlotMap<Particle>& GetParticles() { return _particles; }
+		Unalmas::SlotMap<Rigidbody>& GetRigidbodies() { return _rigidbodies; }
 
 		// Rigidbodies
 		Rigidbody& GetRigidbody(const Unalmas::SlotMapKey& key) const
@@ -2261,7 +1983,6 @@ export namespace Bebop
 		}
 	}
 
-	//Spring* World::ConnectWithSpring(Particle* const a, Particle* const b, float lengthAtRest, float k)
 	Unalmas::SlotMapKey World::ConnectWithSpring(const Unalmas::SlotMapKey a,
 		const Unalmas::SlotMapKey b,
 		float lengthAtRest,
