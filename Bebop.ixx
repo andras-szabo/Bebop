@@ -1,5 +1,6 @@
 #define OUT
 //#define INTEGRATE_EULER
+//#define BEBOP_RELEASE
 
 export module Bebop;
 
@@ -17,8 +18,9 @@ export namespace Bebop
 {
 #pragma region Constants
 	constexpr int	NOT_AVAILABLE{ -1 };
-	constexpr float	DegToRad{ 3.14159f / 180.0f };
-	constexpr float RadToDeg{ 180.0f / 3.14159f };
+	constexpr float PI{ 3.14159f };
+	constexpr float	DegToRad{ PI / 180.0f };
+	constexpr float RadToDeg{ 180.0f / PI };
 #pragma endregion
 
 #pragma region Matrix2x2
@@ -63,11 +65,24 @@ export namespace Bebop
 	{
 		float& operator[](int n)
 		{
+#ifndef BEBOP_RELEASE
+			if (n < 0 || n >= N)
+			{
+				throw std::out_of_range("Index out of range");
+			}
+#endif
 			return _array[n];
 		}
 
 		const float& operator[](int n) const
 		{
+#ifndef BEBOP_RELEASE
+			if (n < 0 || n >= N)
+			{
+				throw std::out_of_range("Index out of range");
+			}
+#endif
+
 			return _array[n];
 		}
 
@@ -225,6 +240,7 @@ export namespace Bebop
 		float		Magnitude() const;
 		float		SqrMagnitude() const;
 		float		Cross(const Vec2& rhs) const;
+		float		Dot(const Vec2& rhs) const;
 
 		Vec2		GetPerpendicular() const;
 		Vec2		NormalizedSafe() const;
@@ -235,6 +251,11 @@ export namespace Bebop
 	float Vec2::Cross(const Vec2& rhs) const
 	{
 		return (x * rhs.y) - (y * rhs.x);
+	}
+
+	float Vec2::Dot(const Vec2& rhs) const
+	{
+		return x * rhs.x + y * rhs.y;
 	}
 
 	Vec2 Vec2::operator-() const
@@ -449,24 +470,23 @@ export namespace Bebop
 			lengthAtRest{ lengthAtRest_ }, k{ k_ }
 		{}
 
-		float									lengthAtRest{ 1.0f };
-		float									k{ 0.0f };
+		float					lengthAtRest{ 1.0f };
+		float					k{ 0.0f };
 
-		Bebop::Particle& A() const { return (*slotmap)[a]; }
-		Bebop::Particle& B() const { return (*slotmap)[b]; }
+		Bebop::Particle&		A() const { return (*slotmap)[a]; }
+		Bebop::Particle&		B() const { return (*slotmap)[b]; }
 
 	private:
-		Unalmas::SlotMapKey		a;
-		Unalmas::SlotMapKey		b;
-
-		Unalmas::SlotMap<Bebop::Particle>* slotmap;
+		Unalmas::SlotMapKey					a;
+		Unalmas::SlotMapKey					b;
+		Unalmas::SlotMap<Bebop::Particle>*	slotmap;
 	};
 
 #pragma region Contact
 	struct Contact
 	{
-		struct Rigidbody* a{ nullptr };
-		struct Rigidbody* b{ nullptr };
+		struct Rigidbody*	a{ nullptr };
+		struct Rigidbody*	b{ nullptr };
 
 		Vec2				normal{ 0.0f, 0.0f };
 		Vec2				start{ 0.0f, 0.0f };
@@ -1683,9 +1703,8 @@ export namespace Bebop
 		Unalmas::SlotMapKey				ConnectWithSpring(Unalmas::SlotMapKey a, Unalmas::SlotMapKey b, float lengthAtRest, float k);
 		Unalmas::SlotMapKey				CreateParticleConstraint(ConstraintType type, const Unalmas::SlotMapKey a, const Unalmas::SlotMapKey b, float param);
 		void							DestroyParticle(const Unalmas::SlotMapKey particle);
-		Unalmas::SlotMap<Particle>& GetParticles() { return _particles; }
-		Unalmas::SlotMap<Rigidbody>& GetRigidbodies() { return _rigidbodies; }
-
+		Unalmas::SlotMap<Particle>&		GetParticles() { return _particles; }
+		
 		// Rigidbodies
 		Rigidbody& GetRigidbody(const Unalmas::SlotMapKey& key) const
 		{
@@ -1696,31 +1715,32 @@ export namespace Bebop
 		Unalmas::SlotMapKey					CreateCircle(float radius, float mass, float x, float y);
 		Unalmas::SlotMapKey					CreateBox(float width, float height, float mass, const Vec2& position);
 		Unalmas::SlotMapKey					CreateBox(float width, float height, float mass, float x, float y);
+		Unalmas::SlotMap<Rigidbody>&		GetRigidbodies() { return _rigidbodies; }
 
 		// Constraints
-		Unalmas::SlotMapKey			CreateJointConstraint(Unalmas::SlotMapKey a, Unalmas::SlotMapKey b, const Vec2& anchorPoint);
+		Unalmas::SlotMapKey					CreateJointConstraint(Unalmas::SlotMapKey a, Unalmas::SlotMapKey b, const Vec2& anchorPoint);
 
-		void						Step(float deltaT);
+		void								Step(float deltaT);
 
-		Vec2						Gravity{ 0.0f, -9.81f };
-		float						FixedTimeStep{ 0.01f };
-		float						SpringDrag{ 0.01f };
+		Vec2								Gravity{ 0.0f, -9.81f };
+		float								FixedTimeStep{ 0.01f };
+		float								SpringDrag{ 0.01f };
 
-		std::vector<Contact>		collisions;
-		Mat<1, 6>					jacobianToLog;
-		Mat<6, 1>					impulseToLog;
+		std::vector<Contact>				collisions;
+		Mat<1, 6>							jacobianToLog;
+		Mat<6, 1>							impulseToLog;
 
 	private:
-		void							GenerateSpringForces();
-		void							EnforceParticleDistanceConstraint(const ParticleConstraint& constraint);
-		void							StepParticles(float deltaT);
-		void							StepRigidbodies(float deltaT);
-		void							DetectCollisions();
-		void							ResolveCollisions();
+		void								GenerateSpringForces();
+		void								EnforceParticleDistanceConstraint(const ParticleConstraint& constraint);
+		void								StepParticles(float deltaT);
+		void								StepRigidbodies(float deltaT);
+		void								DetectCollisions();
+		void								ResolveCollisions();
 
-		Unalmas::SlotMap<Particle>		_particles;
-		Unalmas::SlotMap<Spring>		_springs;
-		Unalmas::SlotMap<Rigidbody>		_rigidbodies;
+		Unalmas::SlotMap<Particle>			_particles;
+		Unalmas::SlotMap<Spring>			_springs;
+		Unalmas::SlotMap<Rigidbody>			_rigidbodies;
 
 		// ---- Constraints
 		Unalmas::SlotMap<ParticleConstraint>		_particleConstraints;
@@ -2027,7 +2047,6 @@ export namespace Bebop
 	{
 		_particles.Erase(particle);
 	}
-
 
 #pragma endregion
 } // namespace Bebop
