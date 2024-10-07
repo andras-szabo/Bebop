@@ -233,8 +233,8 @@ export namespace Bebop
 		Vec2(int x_, int y_) : x{ static_cast<float>(x_) }, y{ static_cast<float>(y_) } {}
 
 		Vec2		operator-() const;
-		Vec2&		operator+=(const Vec2& rhs);
-		Vec2&		operator-=(const Vec2& rhs);
+		Vec2& operator+=(const Vec2& rhs);
+		Vec2& operator-=(const Vec2& rhs);
 		Vec2		operator*(const Matrix2x2& m) const;
 
 		float		Magnitude() const;
@@ -473,20 +473,23 @@ export namespace Bebop
 		float					lengthAtRest{ 1.0f };
 		float					k{ 0.0f };
 
-		Bebop::Particle&		A() const { return (*slotmap)[a]; }
-		Bebop::Particle&		B() const { return (*slotmap)[b]; }
+		Bebop::Particle& A() const { return (*slotmap)[a]; }
+		Bebop::Particle& B() const { return (*slotmap)[b]; }
 
 	private:
 		Unalmas::SlotMapKey					a;
 		Unalmas::SlotMapKey					b;
-		Unalmas::SlotMap<Bebop::Particle>*	slotmap;
+		Unalmas::SlotMap<Bebop::Particle>* slotmap;
 	};
 
 #pragma region Contact
 	struct Contact
 	{
-		struct Rigidbody*	a{ nullptr };
-		struct Rigidbody*	b{ nullptr };
+		struct Rigidbody* a{ nullptr };
+		struct Rigidbody* b{ nullptr };
+
+		Unalmas::SlotMapKey aKey;
+		Unalmas::SlotMapKey bKey;
 
 		Vec2				normal{ 0.0f, 0.0f };
 		Vec2				start{ 0.0f, 0.0f };
@@ -1385,7 +1388,7 @@ export namespace Bebop
 	}
 
 	bool IsColliding(const Box& box1,
-		Rigidbody& rba,
+		Rigidbody& rba, 
 		const Box& box2,
 		Rigidbody& rbb,
 		OUT std::vector<Contact>& contacts)
@@ -1465,7 +1468,7 @@ export namespace Bebop
 
 		const int previousEdge = referenceStartIndex == 0 ? 3 : referenceStartIndex - 1;
 		const int nextEdge = referenceStartIndex == 3 ? 0 : referenceStartIndex + 1;
-		
+
 		for (int i = 0; i < 4; ++i)
 		{
 			if (i != previousEdge && i != nextEdge)
@@ -1493,6 +1496,11 @@ export namespace Bebop
 				Contact contact;
 				contact.a = &rba;
 				contact.b = &rbb;
+
+				// So this will require some refactoring.
+				//contact.aKey = aKey;
+				//contact.bKey = bKey;
+
 				contact.normal = referenceNormal;
 				contact.start = vClip;
 				contact.end = vClip + referenceNormal * -separation;
@@ -1688,19 +1696,23 @@ export namespace Bebop
 
 	// This business w/ didSwapAandB is a bit hacky :(
 	// I think we can get rid of it once Contact stops using pointers
-	bool IsColliding(Rigidbody& a, Rigidbody& b, OUT std::vector<Contact>& contacts, OUT bool& didSwapAandB)
+	bool IsColliding(Rigidbody& a, 
+					 Rigidbody& b,
+					 OUT std::vector<Contact>& contacts, OUT bool& didSwapAandB)
 	{
 		const RigidbodyType typeA = a.GetType();
 		const RigidbodyType typeB = b.GetType();
 
 		if (typeA == RigidbodyType::Circle && typeB == RigidbodyType::Circle)
 		{
-			return IsColliding(std::get<Circle>(a.shape), a, std::get<Circle>(b.shape), b, OUT contacts);
+			return IsColliding(std::get<Circle>(a.shape), a, 
+								std::get<Circle>(b.shape), b, OUT contacts);
 		}
 
 		if (typeA == RigidbodyType::Box && typeB == RigidbodyType::Box)
 		{
-			return IsColliding(std::get<Box>(a.shape), a, std::get<Box>(b.shape), b, OUT contacts);
+			return IsColliding(std::get<Box>(a.shape), a, 
+							   std::get<Box>(b.shape), b, OUT contacts);
 		}
 
 		if ((typeA == RigidbodyType::Box && typeB == RigidbodyType::Circle) ||
@@ -1723,9 +1735,77 @@ export namespace Bebop
 
 #pragma endregion
 
+#pragma region Manifolds
+	class Manifold
+	{
+		friend class ManifoldManager;
+
+	public:
+		Manifold(Unalmas::SlotMapKey a, Unalmas::SlotMapKey b)
+			: _a{a}, _b{b}, _contactCount{0}
+		{
+		}
+
+		bool TryAddContact(const Contact& contact);
+
+		void PreSolve(float deltaT)
+		{
+			for (auto& constraint : _constraints)
+			{
+				constraint.PreSolve(deltaT);
+			}
+		}
+
+		void Solve()
+		{
+			for (auto& constraint : _constraints)
+			{
+				constraint.Solve();
+			}
+		}
+
+		void PostSolve()
+		{
+			for (auto& constraint : _constraints)
+			{
+				constraint.PostSolve();
+			}
+		}
+		
+		int GetContactCount() const 
+		{ 
+			return _contactCount; 
+		}
+		
+	private:
+		static constexpr int MaxContactPoints = 4;
+		std::array<Contact, MaxContactPoints> _contacts;
+		std::array<NonPenetrationConstraint, MaxContactPoints> _constraints;	
+		int _contactCount;
+		Unalmas::SlotMapKey _a;
+		Unalmas::SlotMapKey _b;
+	};
+
+	class ManifoldManager
+	{
+	public:
+		void TryAddContact(const Contact& contact)
+		{
+			// So I guess the question is, who owns the Contacts,
+			// and is it possible for a Contact to exist while
+			// the bodies themselves get destroyed?
+			// I think it is.
+			// So -> update contacts to use SlotmapKeys instead of pointers...?
+		}
+	private:	
+		std::vector<Manifold> _manifolds;
+
+	};
+#pragma endregion
+
 #pragma region World
 
-	struct World
+		struct World
 	{
 		World() = default;
 
@@ -1735,8 +1815,8 @@ export namespace Bebop
 		Unalmas::SlotMapKey				ConnectWithSpring(Unalmas::SlotMapKey a, Unalmas::SlotMapKey b, float lengthAtRest, float k);
 		Unalmas::SlotMapKey				CreateParticleConstraint(ConstraintType type, const Unalmas::SlotMapKey a, const Unalmas::SlotMapKey b, float param);
 		void							DestroyParticle(const Unalmas::SlotMapKey particle);
-		Unalmas::SlotMap<Particle>&		GetParticles() { return _particles; }
-		
+		Unalmas::SlotMap<Particle>& GetParticles() { return _particles; }
+
 		// Rigidbodies
 		Rigidbody& GetRigidbody(const Unalmas::SlotMapKey& key) const
 		{
@@ -1747,7 +1827,7 @@ export namespace Bebop
 		Unalmas::SlotMapKey					CreateCircle(float radius, float mass, float x, float y);
 		Unalmas::SlotMapKey					CreateBox(float width, float height, float mass, const Vec2& position);
 		Unalmas::SlotMapKey					CreateBox(float width, float height, float mass, float x, float y);
-		Unalmas::SlotMap<Rigidbody>&		GetRigidbodies() { return _rigidbodies; }
+		Unalmas::SlotMap<Rigidbody>& GetRigidbodies() { return _rigidbodies; }
 
 		// Constraints
 		Unalmas::SlotMapKey					CreateJointConstraint(Unalmas::SlotMapKey a, Unalmas::SlotMapKey b, const Vec2& anchorPoint);
