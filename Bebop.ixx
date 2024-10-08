@@ -485,9 +485,6 @@ export namespace Bebop
 #pragma region Contact
 	struct Contact
 	{
-		struct Rigidbody* a{ nullptr };
-		struct Rigidbody* b{ nullptr };
-
 		Unalmas::SlotMapKey aKey;
 		Unalmas::SlotMapKey bKey;
 
@@ -496,17 +493,6 @@ export namespace Bebop
 		Vec2				end{ 0.0f, 0.0f };
 
 		float				depth{ 0.0f };
-
-		// Contacts are expected to be temporary objects. The bodies they point to
-		// are not owned by the contact, and they can be moved around in memory after
-		// the contact has been created. Therefore the contact should not be used
-		// after it's been processed. To help catch errors related to this, you can
-		// Invalidate() it after it's been processed.
-		void Invalidate()
-		{
-			a = nullptr;
-			b = nullptr;
-		}
 	};
 #pragma endregion
 
@@ -1387,10 +1373,8 @@ export namespace Bebop
 		return incidentEdgeIndex;
 	}
 
-	bool IsColliding(const Box& box1,
-		Rigidbody& rba, 
-		const Box& box2,
-		Rigidbody& rbb,
+	bool IsColliding(const Box& box1, const Rigidbody& rba, const Unalmas::SlotMapKey aKey,
+					 const Box& box2, const Rigidbody& rbb, const Unalmas::SlotMapKey bKey,
 		OUT std::vector<Contact>& contacts)
 	{
 		Vec2 axis1, point1;
@@ -1494,8 +1478,8 @@ export namespace Bebop
 			if (separation <= 0)
 			{
 				Contact contact;
-				contact.a = &rba;
-				contact.b = &rbb;
+				contact.aKey = aKey;
+				contact.bKey = bKey;
 
 				// So this will require some refactoring.
 				//contact.aKey = aKey;
@@ -1517,7 +1501,9 @@ export namespace Bebop
 		return true;
 	}
 
-	bool IsColliding(const Circle& a, Rigidbody& rba, const Circle& b, Rigidbody& rbb, OUT std::vector<Contact>& contacts)
+	bool IsColliding(const Circle& a, const Rigidbody& rba, const Unalmas::SlotMapKey aKey,
+					 const Circle& b, const Rigidbody& rbb, const Unalmas::SlotMapKey bKey, 
+					 OUT std::vector<Contact>& contacts)
 	{
 		const float radiusA = a.radius;
 		const float radiusB = b.radius;
@@ -1528,8 +1514,10 @@ export namespace Bebop
 		if (ab.SqrMagnitude() <= (radiusA + radiusB) * (radiusA + radiusB))
 		{
 			Contact contact;
-			contact.a = &rba;
-			contact.b = &rbb;
+			//contact.a = &rba;
+			//contact.b = &rbb;
+			contact.aKey = aKey;
+			contact.bKey = bKey;	
 
 			contact.normal = ab;
 			contact.normal.NormalizeSafe();
@@ -1545,7 +1533,9 @@ export namespace Bebop
 		return false;
 	}
 
-	int FindClosestEdgeIndex(const Box& box, const Circle& circle, Rigidbody& boxRB, Rigidbody& circleRB, OUT std::vector<Contact>& contacts)
+	int FindClosestEdgeIndex(const Box& box, const Rigidbody& boxRB, const Unalmas::SlotMapKey boxKey,
+							 const Circle& circle, const Rigidbody& circleRB, const Unalmas::SlotMapKey circleKey,
+							OUT std::vector<Contact>& contacts)
 	{
 		float closestDistanceSquared = circle.radius * circle.radius;
 		int closestEdgeIndex = -1;
@@ -1564,8 +1554,8 @@ export namespace Bebop
 		bool isCircleInsidePolygon{ true };
 		const Vec2 circleOrigin = circleRB.position;
 		Contact contact;
-		contact.a = &boxRB;
-		contact.b = &circleRB;
+		contact.aKey = boxKey;
+		contact.bKey = circleKey;
 
 		for (int i = 0; i < 4; ++i)
 		{
@@ -1688,16 +1678,17 @@ export namespace Bebop
 		return closestEdgeIndex;
 	}
 
-	bool IsColliding(const Box& box, const Circle& circle, Rigidbody& boxRB, Rigidbody& circleRB, OUT std::vector<Contact>& contacts)
+	bool IsColliding(const Box& box, const Rigidbody& boxRB, Unalmas::SlotMapKey boxKey,	
+					 const Circle& circle, const Rigidbody& circleRB, Unalmas::SlotMapKey circleKey,
+					 OUT std::vector<Contact>& contacts)
 	{
-		const int edgeStartIndex = FindClosestEdgeIndex(box, circle, boxRB, circleRB, OUT contacts);
+		const int edgeStartIndex = FindClosestEdgeIndex(box, boxRB, boxKey, 
+														circle, circleRB, circleKey, OUT contacts);
 		return edgeStartIndex >= 0;
 	}
 
-	// This business w/ didSwapAandB is a bit hacky :(
-	// I think we can get rid of it once Contact stops using pointers
-	bool IsColliding(Rigidbody& a, 
-					 Rigidbody& b,
+	bool IsColliding(const Rigidbody& a, Unalmas::SlotMapKey aKey,
+					 const Rigidbody& b, Unalmas::SlotMapKey bKey,
 					 OUT std::vector<Contact>& contacts, OUT bool& didSwapAandB)
 	{
 		const RigidbodyType typeA = a.GetType();
@@ -1705,14 +1696,14 @@ export namespace Bebop
 
 		if (typeA == RigidbodyType::Circle && typeB == RigidbodyType::Circle)
 		{
-			return IsColliding(std::get<Circle>(a.shape), a, 
-								std::get<Circle>(b.shape), b, OUT contacts);
+			return IsColliding(std::get<Circle>(a.shape), a, aKey,
+								std::get<Circle>(b.shape), b, bKey, OUT contacts);
 		}
 
 		if (typeA == RigidbodyType::Box && typeB == RigidbodyType::Box)
 		{
-			return IsColliding(std::get<Box>(a.shape), a, 
-							   std::get<Box>(b.shape), b, OUT contacts);
+			return IsColliding(std::get<Box>(a.shape), a, aKey,
+							   std::get<Box>(b.shape), b, bKey, OUT contacts);
 		}
 
 		if ((typeA == RigidbodyType::Box && typeB == RigidbodyType::Circle) ||
@@ -1720,11 +1711,13 @@ export namespace Bebop
 		{
 			if (typeA == RigidbodyType::Box)
 			{
-				return IsColliding(std::get<Box>(a.shape), std::get<Circle>(b.shape), a, b, OUT contacts);
+				return IsColliding(std::get<Box>(a.shape), a, aKey,
+								   std::get<Circle>(b.shape), b, bKey, OUT contacts);
 			}
 			else
 			{
-				bool isColliding = IsColliding(std::get<Box>(b.shape), std::get<Circle>(a.shape), b, a, OUT contacts);
+				bool isColliding = IsColliding(std::get<Box>(b.shape), b, bKey, 
+											   std::get<Circle>(a.shape), a, aKey, OUT contacts);
 				didSwapAandB = isColliding;
 				return isColliding;
 			}
@@ -1879,13 +1872,25 @@ export namespace Bebop
 
 		for (int i = 0; i < _rigidbodies.Size(); ++i)
 		{
+			Unalmas::SlotMapKey a = _rigidbodies.GetKeyForIndex(i);	
+			const Rigidbody& rba = _rigidbodies[i];
+
 			for (int j = i + 1; j < _rigidbodies.Size(); ++j)
 			{
+				Unalmas::SlotMapKey b = _rigidbodies.GetKeyForIndex(j);	
+				const Rigidbody& rbb = _rigidbodies[j];
+
 				bool didSwapAB = false;
-				if (IsColliding(_rigidbodies[i], _rigidbodies[j], OUT contacts, OUT didSwapAB))
+				if (IsColliding(rba, a, rbb, b, OUT contacts, OUT didSwapAB))
 				{
-					const Unalmas::SlotMapKey a = _rigidbodies.GetKeyForIndex(didSwapAB ? j : i);
-					const Unalmas::SlotMapKey b = _rigidbodies.GetKeyForIndex(didSwapAB ? i : j);
+					//const Unalmas::SlotMapKey a = _rigidbodies.GetKeyForIndex(didSwapAB ? j : i);
+					//const Unalmas::SlotMapKey b = _rigidbodies.GetKeyForIndex(didSwapAB ? i : j);
+
+					if (didSwapAB)
+					{
+						std::swap(a, b);
+					}
+
 					for (const auto& c : contacts)
 					{
 						collisions.push_back(c);
@@ -1906,23 +1911,15 @@ export namespace Bebop
 	{
 		for (auto& contact : collisions)
 		{
-			Rigidbody* const a = contact.a;
-			Rigidbody* const b = contact.b;
+			Rigidbody& a = _rigidbodies[contact.aKey];
+			Rigidbody& b = _rigidbodies[contact.bKey];
 
-			const bool isBstatic = b->_inverseMass <= 0.0f;
-			const bool isAstatic = a->_inverseMass <= 0.0f;
+			const bool isBstatic = b._inverseMass <= 0.0f;
+			const bool isAstatic = a._inverseMass <= 0.0f;
 
 			if (isBstatic && isAstatic)
 			{
 				continue;
-			}
-
-			bool isBox{ false };
-
-			// TODO remove when not testing anymore
-			if (a->GetType() == RigidbodyType::Box || b->GetType() == RigidbodyType::Box)
-			{
-				isBox = true;
 			}
 
 			// We apply position correction depending on the relative mass
@@ -1937,50 +1934,50 @@ export namespace Bebop
 			// bAdjustment = (depth / (1/mA + 1/mB)) * (1 / mB)
 			//
 
-			const float d = contact.depth / (a->_inverseMass + b->_inverseMass);
-			const float aAdjustment = isBstatic ? contact.depth : d * a->_inverseMass;
-			const float bAdjustment = isAstatic ? contact.depth : d * b->_inverseMass;
+			const float d = contact.depth / (a._inverseMass + b._inverseMass);
+			const float aAdjustment = isBstatic ? contact.depth : d * a._inverseMass;
+			const float bAdjustment = isAstatic ? contact.depth : d * b._inverseMass;
 
-			a->_positionAdjustment -= contact.normal * aAdjustment;
-			b->_positionAdjustment += contact.normal * bAdjustment;
+			a._positionAdjustment -= contact.normal * aAdjustment;
+			b._positionAdjustment += contact.normal * bAdjustment;
 
 			//TODO - ??? - should we apply _positionAdjustments immediately, now?
 			//			   In the current setup, it would not matter, because the
 			//				collision has already been calculated before.
 
-			const float e = fmin(a->restitution, b->restitution);
+			const float e = fmin(a.restitution, b.restitution);
 
 			// Calculate relative velocity, considering both linear velocity of the body, and angular velocity
 			// at the point of contact
-			const Vec2 ra = contact.end - a->position;
-			const Vec2 rb = contact.start - b->position;
-			const Vec2 va = a->linearVelocity + Vec2{ -a->angularVelocity * ra.y, a->angularVelocity * ra.x };
-			const Vec2 vb = b->linearVelocity + Vec2{ -b->angularVelocity * rb.y, b->angularVelocity * rb.x };
+			const Vec2 ra = contact.end - a.position;
+			const Vec2 rb = contact.start - b.position;
+			const Vec2 va = a.linearVelocity + Vec2{ -a.angularVelocity * ra.y, a.angularVelocity * ra.x };
+			const Vec2 vb = b.linearVelocity + Vec2{ -b.angularVelocity * rb.y, b.angularVelocity * rb.x };
 			const Vec2 vRelative = va - vb;
 
 			// Calculate impulse along the collision normal
 			const float raXn = ra.x * contact.normal.y - ra.y * contact.normal.x;
 			const float rbXn = rb.x * contact.normal.y - rb.y * contact.normal.x;
-			const float raI = (raXn * raXn) * a->_inverseMomentOfInertia;
-			const float rbI = (rbXn * rbXn) * b->_inverseMomentOfInertia;
+			const float raI = (raXn * raXn) * a._inverseMomentOfInertia;
+			const float rbI = (rbXn * rbXn) * b._inverseMomentOfInertia;
 
-			const float impulseMagnitude = (-(1.0f + e) * Dot(vRelative, contact.normal)) / (a->_inverseMass + b->_inverseMass + raI + rbI);
+			const float impulseMagnitude = (-(1.0f + e) * Dot(vRelative, contact.normal)) / (a._inverseMass + b._inverseMass + raI + rbI);
 			const Vec2 jNormal = contact.normal * impulseMagnitude;
 
 			// Calculate impulse along the collision tangent
-			const float f = fminf(a->surfaceFriction.y, b->surfaceFriction.y);
+			const float f = fminf(a.surfaceFriction.y, b.surfaceFriction.y);
 			const Vec2 collisionTangent = contact.normal.GetPerpendicular();
 			const float raXt = ra.x * collisionTangent.y - ra.y * collisionTangent.x;
 			const float rbXt = rb.x * collisionTangent.y - rb.y * collisionTangent.x;
-			const float raIt = (raXt * raXt) * a->_inverseMomentOfInertia;
-			const float rbIt = (rbXt * rbXt) * b->_inverseMomentOfInertia;
-			const float tImpulseMagnitude = f * (-(1.0f + e) * Dot(vRelative, collisionTangent)) / (a->_inverseMass + b->_inverseMass + raIt + rbIt);
+			const float raIt = (raXt * raXt) * a._inverseMomentOfInertia;
+			const float rbIt = (rbXt * rbXt) * b._inverseMomentOfInertia;
+			const float tImpulseMagnitude = f * (-(1.0f + e) * Dot(vRelative, collisionTangent)) / (a._inverseMass + b._inverseMass + raIt + rbIt);
 			const Vec2 jTangent = collisionTangent * tImpulseMagnitude;
 
 			const Vec2 j = jNormal + jTangent;
 
-			a->AddImpulseAtPoint(j, ra);
-			b->AddImpulseAtPoint(-j, rb);
+			a.AddImpulseAtPoint(j, ra);
+			b.AddImpulseAtPoint(-j, rb);
 		}
 	}
 
